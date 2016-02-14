@@ -6,6 +6,7 @@ import time
 import re
 import datetime
 from HTMLParser import HTMLParser
+import sys
 #from datetime import date
 
 
@@ -14,8 +15,8 @@ def_headers = {'accept':'text/html,application/xhtml+xml,application/xml;q=0.9,i
 'accept-language':'en-US,en;q=0.8', 
 'user-agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.90 Safari/537.36'}
 
+max_pages=1
 max_entries=5
-max_entries_in_page=25
 #entry_structure=[link, title, imdb, date, size, L, S, comments, comment_count, uploader]
 
 # Raw page parser to get the torrent info
@@ -31,13 +32,13 @@ class MainHTMLParser(HTMLParser):
         if ('YIFI' in entry['title']):
             print ("YIFI FOUND!")
             return False
-        if (not 'GB' in entry['size']):
-            print ("Size not in GB "+str(entry['size']))
-            return False
-        clean_size = float(re.sub(' .*','',entry['size']))
-        if (clean_size < 3.8):
-            print ("Size too small "+str(entry['size']))
-            return False
+        #if (not 'GB' in entry['size']):
+        #    print ("Size not in GB "+str(entry['size']))
+        #    return False
+        #clean_size = float(re.sub(' .*','',entry['size']))
+        #if (clean_size < 3.8):
+        #    print ("Size too small "+str(entry['size']))
+        #    return False
         return True
 
     def _translate(self, entry):
@@ -80,14 +81,16 @@ class MainHTMLParser(HTMLParser):
             entry = self._translate(self.current_entry)
             if (entry) and (self._filter(entry)):
                 self.dictionary.append(self.current_entry)
+                print("Got one!")
             self.current_entry=[]
             if (len(self.dictionary) == self.max_entries):
+                print("ABORT??")
                 self.go='ABORT'
 
 # Parser for the torrent links extracted from pages
 class MagnetizerHTMLParser(HTMLParser):
-    def __init__(self, max_entries):
-        self.max_entries=max_entries
+    def __init__(self, max_pages):
+        self.max_entries=max_pages
         self.entry=0
         self.go='GO'
         self.dictionary=[]
@@ -105,34 +108,45 @@ class MagnetizerHTMLParser(HTMLParser):
 def generate_torrent(magnet, name, dry=False):
     torrent="d10:magnet-uri{}:{}e".format(len(magnet),magnet)
     if (not dry):
-        for i in range(max_entries):
+        for i in range(max_pages):
             f=open("/home/ishaypeled/rtorrent/watch/"+name+".torrent", "w")
             f.write(torrent)
             f.close()
 
 def transact(headers, body='', method="GET", path="/"):
-    time.sleep(random.randint(1,10))
+    #time.sleep(random.randint(1,10))
     c = httplib.HTTPSConnection("rarbg.to")
-    print "Making {} request to {}...".format(method, path)
+    print "Making {} request to {}...".format(method, "rarbg.to/"+path)
     c.request(method=method, url=path, body=body, headers=headers)
     response = c.getresponse()
     print "Response status [{}] reason [{}]...".format(response.status, response.reason)
     # We didn't get the response we wanted
     if (response.status != 200):
         print 'Damn, Were caught! Status is '+str(response.status)
+        print response.getheaders()
         return False
     return response.read()
 
 def main():
+    target = sys.argv[1]
     # This parser will handle each torrents page to extract torrent title and torrent link
     parser = MainHTMLParser(max_entries)
     # This parser will handle each torrent link to extract magnet info from. Initializing here to keep persistant
     magnets = MagnetizerHTMLParser(max_entries)
     i=0
-    for i in parser.dictionary:
-        print i
-    while (len(parser.dictionary) < max_entries):
-        page = transact(headers=def_headers, path="/torrents.php?category=45&page="+str(i))
+    while (len(parser.dictionary) < max_pages):
+        parameters={ 
+                'search':target,
+                'category':'18',
+                'category':'41',
+                'order':'seeders',
+                'by':'DESC',
+                'page':str(i)
+                 }
+        parameters = urllib.urlencode(parameters)
+        path = "/torrents.php?"+parameters
+
+        page = transact(headers=def_headers, path=path)
         if (not page):
             # We're caught...
             print "Master, they're on to us at torrent page! Do something!"
@@ -162,4 +176,7 @@ def main():
             f.write('\n')
 
 if (__name__ == '__main__'):
+    if (len(sys.argv) < 2):
+        print "Usage: "+sys.argv[0]+" <search>"
+        exit(1)
     main()
