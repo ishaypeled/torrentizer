@@ -48,15 +48,12 @@ class AdapterRarbg(Adapter):
     def _transact(self, headers, body='', method="GET", path="/"):
         # time.sleep(random.randint(1,10))
         c = httplib.HTTPSConnection("rarbg.to")
-        print "Making {} request to {}...".format(method, "rarbg.to/"+path)
         c.request(method=method, url=path, body=body, headers=headers)
         response = c.getresponse()
-        print "Response status [{}] reason [{}]...".format
         (response.status, response.reason)
         # We didn't get the response we wanted
         if (response.status != 200):
             print 'Damn, Were caught! Status is '+str(response.status)
-            print response.getheaders()
             return False
         return response.read()
 
@@ -109,12 +106,21 @@ class AdapterRarbg(Adapter):
             entry[AdapterRarbg.SIZE] = parser.dictionary[i][4]
             entry[AdapterRarbg.LEECHERS] = parser.dictionary[i][5]
             entry[AdapterRarbg.SEEDERS] = parser.dictionary[i][6]
-            print (
-                    '''Title: [{}]\n
-                    Magnet: [{}]\n
-                    Filename: {}'''.format(parser.dictionary[i][1],
-                                           magnets.dictionary[i],
-                                           parser.dictionary[i][0]+".torrent"))
+            print '''
+Title: {}
+Magnet: {}
+IMDB: {}
+Date: {}
+Size: {}
+Leechers: {}
+Seeders: {}'''.format(entry[AdapterRarbg.TITLE],
+                      entry[AdapterRarbg.MAGNET],
+                      entry[AdapterRarbg.IMDB],
+                      entry[AdapterRarbg.DATE],
+                      entry[AdapterRarbg.SIZE],
+                      entry[AdapterRarbg.LEECHERS],
+                      entry[AdapterRarbg.SEEDERS])
+
             self._generateTorrent(
                                  magnets.dictionary[i],
                                  parser.dictionary[i][0].

@@ -12,7 +12,6 @@ class MainHTMLParser(HTMLParser):
 
     def _filter(self, entry):
         if ('YIFI' in entry['title']):
-            print ("YIFI FOUND!")
             return False
         # if (not 'GB' in entry['size']):
         #    print ("Size not in GB "+str(entry['size']))
@@ -63,10 +62,8 @@ class MainHTMLParser(HTMLParser):
             entry = self._translate(self.current_entry)
             if (entry) and (self._filter(entry)):
                 self.dictionary.append(self.current_entry)
-                print("Got one!")
             self.current_entry = []
             if (len(self.dictionary) == self.max_entries):
-                print("ABORT??")
                 self.go = 'ABORT'
 
 
