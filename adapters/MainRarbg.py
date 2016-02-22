@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
+import sys
 from AdapterRarbg import AdapterRarbg
 
-adapter = AdapterRarbg("The blacklist", 5)
+search = sys.argv[1]
+adapter = AdapterRarbg(search, 5)
 adapter.refresh()
