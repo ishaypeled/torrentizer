@@ -5,9 +5,9 @@ import urllib
 # import time
 # import re
 import datetime
-import sys
+import sys, os
 # from datetime import date
-from adapter import Adapter
+from Adapter import Adapter
 from Parsers import MainHTMLParser, MagnetizerHTMLParser
 
 def_headers = {
@@ -26,7 +26,7 @@ def generate_torrent(magnet, name, dry=False):
     torrent = "d10:magnet-uri{}:{}e".format(len(magnet), magnet)
     if (not dry):
         for i in range(max_pages):
-            f = open("/home/ishaypeled/rtorrent/watch/"+name+".torrent", "w")
+            f = open(os.environ['HOME'] + "/rtorrent/watch/"+name+".torrent", "w")
             f.write(torrent)
             f.close()
 
@@ -34,11 +34,10 @@ def generate_torrent(magnet, name, dry=False):
 def transact(headers, body='', method="GET", path="/"):
     # time.sleep(random.randint(1,10))
     c = httplib.HTTPSConnection("rarbg.to")
-    print "Making {} request to {}...".format(method, "rarbg.to/"+path)
+    print "Making {} request to {}...".format(method, "rarbg.to"+path)
     c.request(method=method, url=path, body=body, headers=headers)
     response = c.getresponse()
-    print "Response status [{}] reason [{}]...".format
-    (response.status, response.reason)
+    print "Response status [{}] reason [{}]...".format(response.status, response.reason)
     # We didn't get the response we wanted
     if (response.status != 200):
         print 'Damn, Were caught! Status is '+str(response.status)
@@ -47,8 +46,8 @@ def transact(headers, body='', method="GET", path="/"):
     return response.read()
 
 
-def main():
-    target = sys.argv[1]
+def main(category):
+    target = sys.argv[2]
     # This parser will handle each torrents page to extract
     # torrent title and torrent link
     parser = MainHTMLParser(max_entries)
@@ -59,8 +58,7 @@ def main():
     while (len(parser.dictionary) < max_pages):
         parameters = {
                 'search': target,
-                'category': '18',
-                'category': '41',
+                'category': category,
                 'order': 'seeders',
                 'by': 'DESC',
                 'page': str(i)
@@ -88,7 +86,7 @@ def main():
 
     for i in range(len(magnets.dictionary)):
         print ("====================\nTitle: [{}]\nMagnet: [{}]\nFilename: {}".format(parser.dictionary[i][1], magnets.dictionary[i], parser.dictionary[i][0]+".torrent"))
-        generate_torrent(magnets.dictionary[i], parser.dictionary[i][0].replace('/torrent/', ''), True)
+        generate_torrent(magnets.dictionary[i], parser.dictionary[i][0].replace('/torrent/', ''))
 
     with open('db.txt', 'a') as f:
         for item in (parser.dictionary):
@@ -97,8 +95,23 @@ def main():
                 f.write(",,"+item[i])
             f.write('\n')
 
+def usage():
+    msg = """Usage: """+sys.argv[0]+""" <option> <search>
+
+options:
+    -tv     -       search for TV shows
+    -mv     -       search for movies"""
+    print(msg)
+    exit(1)
+
 if (__name__ == '__main__'):
-    if (len(sys.argv) < 2):
-        print "Usage: "+sys.argv[0]+" <search>"
-        exit(1)
-    main()
+    if (len(sys.argv) < 3):
+        usage()
+    if "-mv" in sys.argv[1]:
+        category = '44;45'
+    elif "-tv" in sys.argv[1]:
+        category = '18;41'
+    else:
+        print("Invalid option!")
+        usage()
+    main(category)
