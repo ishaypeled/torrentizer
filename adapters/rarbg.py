@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import httplib
-import urllib
+import urllib, urllib2
+import lxml.html
 # import random
 # import time
 # import re
@@ -9,6 +10,12 @@ import sys, os
 # from datetime import date
 from Adapter import Adapter
 from Parsers import MainHTMLParser, MagnetizerHTMLParser
+try:
+    import Image
+except ImportError:
+    from PIL import Image
+import pytesseract
+
 
 def_headers = {
     'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -41,9 +48,43 @@ def transact(headers, body='', method="GET", path="/"):
     # We didn't get the response we wanted
     if (response.status != 200):
         print 'Damn, Were caught! Status is '+str(response.status)
+        if response.status == 302:
+            get_captcha()
+            solve_captcha()
         print response.getheaders()
         return False
     return response.read()
+
+
+def get_captcha():
+    """
+    Grab the captcha from bot_check
+    """
+    req = urllib2.Request('http://rarbg.to/bot_check.php', None, def_headers)
+    f = urllib2.urlopen(req)
+    page = f.read()
+
+    # Grab captcha image from url
+    tree = lxml.html.fromstring(page)
+    imgurl = "http://rarbg.to" + tree.xpath(".//img")[1].get('src')
+
+    # Read the image and write to file
+    req = urllib2.Request(imgurl, None, def_headers)
+    f = urllib2.urlopen(req)
+    img = f.read()
+
+    open('out.png', 'wb').write(img)
+
+
+def solve_captcha():
+    """
+    Convert captcha to text and submit form
+    """
+    captcha = pytesseract.image_to_string(Image.open('out.png'), lang='eng')
+    print("======Captcha found!=======")
+    print(captcha)
+    print("===========================")
+    # TODO: input captcha in text field and submit form
 
 
 def main(category):
