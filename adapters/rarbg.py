@@ -2,6 +2,7 @@
 import httplib
 import urllib, urllib2
 import lxml.html
+from py_phone.menu import show_menu
 # import random
 # import time
 # import re
@@ -25,6 +26,7 @@ def_headers = {
 
 max_pages = 1
 max_entries = 5
+options = []
 # entry_structure=
 # [link, title, imdb, date, size, L, S, comments, comment_count, uploader]
 
@@ -49,18 +51,17 @@ def transact(headers, body='', method="GET", path="/"):
     if (response.status != 200):
         print 'Damn, Were caught! Status is '+str(response.status)
         if response.status == 302:
-            get_captcha()
             solve_captcha()
-        print response.getheaders()
+#         print response.getheaders()
         return False
     return response.read()
 
 
-def get_captcha():
+def get_captcha(url):
     """
     Grab the captcha from bot_check
     """
-    req = urllib2.Request('http://rarbg.to/bot_check.php', None, def_headers)
+    req = urllib2.Request(url, None, def_headers)
     f = urllib2.urlopen(req)
     page = f.read()
 
@@ -74,21 +75,28 @@ def get_captcha():
     img = f.read()
 
     open('out.png', 'wb').write(img)
+    captcha = pytesseract.image_to_string(Image.open('out.png'), lang='eng')
+    return captcha
 
 
 def solve_captcha():
     """
-    Convert captcha to text and submit form
+    solve captcha and submit form
     """
-    captcha = pytesseract.image_to_string(Image.open('out.png'), lang='eng')
-    print("======Captcha found!=======")
-    print(captcha)
-    print("===========================")
+    url = 'http://rarbg.to/bot_check.php'
+    captcha = get_captcha(url)
+    values = {'solve_string': captcha}
+
+    data = urllib.urlencode(values)
+    req = urllib2.Request(url, data, def_headers)
+    response = urllib2.urlopen(req)
+    the_page = response.read()
+    print("[+] " + captcha + " is your captcha, now do something with it")
     # TODO: input captcha in text field and submit form
 
 
 def main(category):
-    target = sys.argv[2]
+    target = sys.argv[2:]
     # This parser will handle each torrents page to extract
     # torrent title and torrent link
     parser = MainHTMLParser(max_entries)
@@ -126,8 +134,20 @@ def main(category):
         magnets.feed(page)
 
     for i in range(len(magnets.dictionary)):
-        print ("====================\nTitle: [{}]\nMagnet: [{}]\nFilename: {}".format(parser.dictionary[i][1], magnets.dictionary[i], parser.dictionary[i][0]+".torrent"))
-        generate_torrent(magnets.dictionary[i], parser.dictionary[i][0].replace('/torrent/', ''))
+        title = parser.dictionary[i][1]
+        size = parser.dictionary[i][4]
+        seeders = parser.dictionary[i][5]
+#         print ("====================\nTitle: [{}]\nMagnet: [{}]\nFilename: {}".format(parser.dictionary[i][1], magnets.dictionary[i], parser.dictionary[i][0]+".torrent"))
+        options.append(title + " | " + size + " | " + seeders + " seeders")
+
+    # TODO: send and retrieve selection from DevopsBot
+    print("----------------------------------------------------------------------")
+    selection = show_menu(options, sort=False, location=True)
+    try:
+        generate_torrent(magnets.dictionary[selection], parser.dictionary[selection][0].replace('/torrent/', ''))
+    except IndexError:
+        print("Exiting")
+        sys.exit(0)
 
     with open('db.txt', 'a') as f:
         for item in (parser.dictionary):
