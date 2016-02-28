@@ -2,7 +2,7 @@
 import httplib
 import urllib, urllib2
 import lxml.html
-from py_phone.menu import show_menu
+from menu import show_menu
 # import random
 # import time
 # import re
