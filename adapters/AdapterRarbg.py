@@ -16,9 +16,9 @@ class AdapterRarbg(Adapter):
     SEEDERS = 'Seeders'
     MAX_PAGES = 1
 
-    def __init__(self, searchString, maxEntries):
+    def __init__(self, searchString, category, maxEntries):
         # super(AdapterRarbg, self).__init__(self, searchString, maxEntries)
-        Adapter.__init__(self, searchString, maxEntries)
+        Adapter.__init__(self, searchString, category, maxEntries)
         self._entries = []
         self._defHeaders = {
             'accept': '''text/html,application/xhtml+xml,application/xml;q=0.9,
@@ -68,8 +68,7 @@ class AdapterRarbg(Adapter):
         while (len(parser.dictionary) < AdapterRarbg.MAX_PAGES):
             parameters = {
                     'search': self._searchString,
-                    'category': '18',
-                    'category': '41',
+                    'category': self._category,
                     'order': 'seeders',
                     'by': 'DESC',
                     'page': str(i)
