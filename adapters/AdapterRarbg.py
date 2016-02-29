@@ -1,10 +1,16 @@
-import urllib
+import urllib, urllib2
 import httplib
+import lxml.html
 import os, sys
 import pyprind
 from menu import show_menu
 from Adapter import Adapter
 from Parsers import MainHTMLParser, MagnetizerHTMLParser
+try:
+    import Image
+except ImportError:
+    from PIL import IMG
+import pytesseract
 
 
 class AdapterRarbg(Adapter):
@@ -30,6 +36,42 @@ class AdapterRarbg(Adapter):
             'accept-language': 'en-US,en;q=0.8',
             'user-agent': '''Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36
             (KHTML, like Gecko) Chrome/42.0.2311.90 Safari/537.36'''}
+
+    def _get_captcha(self, url):
+        """
+        Grab the captcha from bot_check
+        """
+        req = urllib2.Request(url, None, self._defHeaders)
+        f = urllib2.urlopen(req)
+        page = f.read()
+
+        # Grab captcha image from url
+        tree = lxml.html.fromstring(page)
+        imgurl = "http://rarbg.to" + tree.xpath(".//img")[1].get('src')
+
+        # Read the image and write to file
+        req = urllib2.Request(imgurl, None, self._defHeaders)
+        f = urllib2.urlopen(req)
+        img = f.read()
+
+        open('out.png', 'wb').write(img)
+        captcha = pytesseract.image_to_string(Image.open('out.png'), lang='eng')
+        return captcha
+
+    def _solve_captcha(self):
+        """
+        solve captcha and submit form
+        """
+        url = 'http://rarbg.to/bot_check.php'
+        captcha = self._get_captcha(url)
+        values = {'solve_string': captcha}
+
+        data = urllib.urlencode(values)
+        req = urllib2.Request(url, data, self._defHeaders)
+        response = urllib2.urlopen(req)
+        the_page = response.read()
+        print("[+] " + captcha + " is your captcha, now do something with it")
+        # TODO: input captcha in text field and submit form
 
     def getAdapterName(self):
         return "rarbg.to adapter"
@@ -57,8 +99,11 @@ class AdapterRarbg(Adapter):
         # We didn't get the response we wanted
         if (response.status != 200):
             print '\nDamn, Were caught! Status is '+str(response.status)
+            if response.status == 302:
+                self._solve_captcha()
             return False
         return response.read()
+
 
     def refresh(self):
         # This parser will handle each torrents page to extract
