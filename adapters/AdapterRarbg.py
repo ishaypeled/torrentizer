@@ -1,6 +1,7 @@
 import urllib
 import httplib
 import os, sys
+import pyprind
 from menu import show_menu
 from Adapter import Adapter
 from Parsers import MainHTMLParser, MagnetizerHTMLParser
@@ -55,7 +56,7 @@ class AdapterRarbg(Adapter):
         (response.status, response.reason)
         # We didn't get the response we wanted
         if (response.status != 200):
-            print 'Damn, Were caught! Status is '+str(response.status)
+            print '\nDamn, Were caught! Status is '+str(response.status)
             return False
         return response.read()
 
@@ -67,6 +68,7 @@ class AdapterRarbg(Adapter):
         # Initializing here to keep persistant
         magnets = MagnetizerHTMLParser(self._maxEntries)
         i = 0
+        bar = pyprind.ProgPercent(AdapterRarbg.MAX_PAGES, title="Searching. . .")
         while (len(parser.dictionary) < AdapterRarbg.MAX_PAGES):
             parameters = {
                     'search': self._searchString,
@@ -85,7 +87,9 @@ class AdapterRarbg(Adapter):
                 return
             parser.feed(page)
             i = i+1
+            bar.update()
 
+        bar = pyprind.ProgBar(len(parser.dictionary), title="\nFetching results. . .", width=70)
         for i in parser.dictionary:
             # Get torrent page
             page = self._transact(headers=self._defHeaders,
@@ -96,6 +100,7 @@ class AdapterRarbg(Adapter):
                 break
             # Feed torrent page to the magnets parser
             magnets.feed(page)
+            bar.update()
 
         options = []
         for i in range(len(magnets.dictionary)):
@@ -130,7 +135,11 @@ Leechers:: {}'''.format(entry[AdapterRarbg.TITLE],
 
         print
         print("--------------------------------------------------------")
-        selection = show_menu(options, sort=False, location=True)
+        try:
+            selection = show_menu(options, sort=False, location=True)
+        except KeyboardInterrupt:
+            print("\nExiting")
+            sys.exit(0)
         try:
             self._generateTorrent(
                                     magnets.dictionary[selection],
