@@ -6,7 +6,7 @@ import os
 import pytesseract
 import pyprind
 from Adapter import Adapter
-from Parsers import MainHTMLParser, MagnetizerHTMLParser
+from ParsersRarbg import MainHTMLParser, MagnetizerHTMLParser
 from PIL import Image
 
 
@@ -27,7 +27,6 @@ class AdapterRarbg(Adapter):
         Initialize the RarBg adapter
         """
         Adapter.__init__(self, searchString, category, maxEntries)
-        self._entries = []
         self._defHeaders = {
             'accept': '''text/html,application/xhtml+xml,application/xml;q=0.9,
             image/webp,*/*;q=0.8''',
@@ -36,7 +35,7 @@ class AdapterRarbg(Adapter):
             'user-agent': '''Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36
             (KHTML, like Gecko) Chrome/42.0.2311.90 Safari/537.36'''}
 
-    def _get_captcha(self, url):
+    def _getCaptcha(self, url):
         """
         Grab the captcha from bot_check
         """
@@ -60,12 +59,12 @@ class AdapterRarbg(Adapter):
                 Image.open('out.png'), lang='eng')
         return (captcha, captcha_id)
 
-    def _solve_captcha(self):
+    def _solveCaptcha(self):
         """
         Solve captcha and submit form
         """
         url = 'http://rarbg.to/bot_check.php'
-        captcha, captcha_id = self._get_captcha(url)
+        captcha, captcha_id = self._getCaptcha(url)
         print("Id: "+captcha_id)
         values = {'solve_string': captcha,
                   'captcha_id': captcha_id,
@@ -119,7 +118,7 @@ class AdapterRarbg(Adapter):
         if (response.status != 200):
             print '\nDamn, Were caught! Status is '+str(response.status)
             if response.status == 302:
-                self._solve_captcha()
+                self._solveCaptcha()
             return False
         return response.read()
 
@@ -149,7 +148,7 @@ class AdapterRarbg(Adapter):
             while (not page):
                 # We're caught...
                 print "Master, they're on to us at torrent page! Do something!"
-                self._solve_captcha()
+                self._solveCaptcha()
                 page = self._transact(headers=self._defHeaders,
                                       body='', method="GET", path=path)
             parser.feed(page)
@@ -166,7 +165,7 @@ class AdapterRarbg(Adapter):
             while (not page):
                 # We're caught...
                 print "Master, they're on to us at torrent link! Do something!"
-                self._solve_captcha()
+                self._solveCaptcha()
                 page = self._transact(headers=self._defHeaders,
                                       body='', method="GET", path=i[0])
             # Feed torrent page to the magnets parser

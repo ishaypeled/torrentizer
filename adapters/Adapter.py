@@ -3,6 +3,7 @@ class Adapter:
         self._searchString = searchString
         self._category = category
         self._maxEntries = maxEntries
+        self._entries = []
 
     def getAdapterName(self):
         raise("Not implemented")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import sys
-from AdapterRarbg import AdapterRarbg
+from adapters.AdapterRarbg import AdapterRarbg
 
 def usage():
     msg = """Usage: """+sys.argv[0]+""" <option> <search>
