@@ -4,6 +4,7 @@ import httplib
 import lxml.html
 import os
 import pytesseract
+import pyprind
 from Adapter import Adapter
 from Parsers import MainHTMLParser, MagnetizerHTMLParser
 from PIL import Image
@@ -154,6 +155,10 @@ class AdapterRarbg(Adapter):
             parser.feed(page)
             i = i+1
 
+        bar = pyprind.ProgBar(len(parser.dictionary),
+                              title="\nFetching results...",
+                              width=70,
+                              bar_char="*")
         for i in parser.dictionary:
             # Get torrent page
             page = self._transact(headers=self._defHeaders,
@@ -166,6 +171,7 @@ class AdapterRarbg(Adapter):
                                       body='', method="GET", path=i[0])
             # Feed torrent page to the magnets parser
             magnets.feed(page)
+            bar.update()
 
         options = []
         for i in range(len(magnets.dictionary)):
@@ -189,12 +195,12 @@ Date: {}
 Size: {}
 Seeders: {}
 Leechers: {}'''.format(entry[AdapterRarbg.TITLE],
-                        entry[AdapterRarbg.MAGNET],
-                        entry[AdapterRarbg.IMDB],
-                        entry[AdapterRarbg.DATE],
-                        entry[AdapterRarbg.SIZE],
-                        entry[AdapterRarbg.SEEDERS],
-                        entry[AdapterRarbg.LEECHERS])
+                       entry[AdapterRarbg.MAGNET],
+                       entry[AdapterRarbg.IMDB],
+                       entry[AdapterRarbg.DATE],
+                       entry[AdapterRarbg.SIZE],
+                       entry[AdapterRarbg.SEEDERS],
+                       entry[AdapterRarbg.LEECHERS])
 
             # XXX: Move this somewhere else
             self._generateTorrent(
