@@ -1,7 +1,12 @@
 import urllib
+import urllib2
 import httplib
+import lxml.html
+import os
+import pytesseract
 from Adapter import Adapter
 from Parsers import MainHTMLParser, MagnetizerHTMLParser
+from PIL import Image
 
 
 class AdapterRarbg(Adapter):
@@ -16,9 +21,11 @@ class AdapterRarbg(Adapter):
     SEEDERS = 'Seeders'
     MAX_PAGES = 1
 
-    def __init__(self, searchString, maxEntries):
-        # super(AdapterRarbg, self).__init__(self, searchString, maxEntries)
-        Adapter.__init__(self, searchString, maxEntries)
+    def __init__(self, searchString, category, maxEntries):
+        """
+        Initialize the RarBg adapter
+        """
+        Adapter.__init__(self, searchString, category, maxEntries)
         self._entries = []
         self._defHeaders = {
             'accept': '''text/html,application/xhtml+xml,application/xml;q=0.9,
@@ -28,36 +35,97 @@ class AdapterRarbg(Adapter):
             'user-agent': '''Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36
             (KHTML, like Gecko) Chrome/42.0.2311.90 Safari/537.36'''}
 
+    def _get_captcha(self, url):
+        """
+        Grab the captcha from bot_check
+        """
+        req = urllib2.Request(url, None, self._defHeaders)
+        f = urllib2.urlopen(req)
+        page = f.read()
+
+        # Grab captcha image from url
+        tree = lxml.html.fromstring(page)
+        captcha_target = tree.xpath(".//img")[1].get('src')
+        captcha_id = tree.xpath(".//input")[1].get('value')
+        imgurl = "http://rarbg.to" + captcha_target
+
+        # Read the image and write to file
+        req = urllib2.Request(imgurl, None, self._defHeaders)
+        f = urllib2.urlopen(req)
+        img = f.read()
+
+        open('out.png', 'wb').write(img)
+        captcha = pytesseract.image_to_string(
+                Image.open('out.png'), lang='eng')
+        return (captcha, captcha_id)
+
+    def _solve_captcha(self):
+        """
+        Solve captcha and submit form
+        """
+        url = 'http://rarbg.to/bot_check.php'
+        captcha, captcha_id = self._get_captcha(url)
+        print("Id: "+captcha_id)
+        values = {'solve_string': captcha,
+                  'captcha_id': captcha_id,
+                  'submitted_bot_captcha': '1'}
+
+        data = urllib.urlencode(values)
+        req = urllib2.Request(url, data, self._defHeaders)
+        response = urllib2.urlopen(req)
+        response.read()
+
+        print("[+] " + captcha + " is your captcha. "
+                                 "It has been submitted and you should "
+                                 "be good to go!")
+
     def getAdapterName(self):
+        """
+        Identifier for this adapter
+        """
         return "rarbg.to adapter"
 
     def getItems(self):
+        """
+        Found entries for this adapter
+        """
         return self._entries
 
     def _generateTorrent(self, magnet, name, dry=False):
+        """
+        Make torrent from magnet
+        XXX: Extract to another utility class
+        """
         torrent = "d10:magnet-uri{}:{}e".format(len(magnet), magnet)
         if (not dry):
             for i in range(AdapterRarbg.MAX_PAGES):
-                # XXX: This should probably not be here
-                f = open("/home/ishaypeled/rtorrent/watch/" +
+                f = open(os.environ['HOME'] +
+                         "/rtorrent/watch/" +
                          name +
                          ".torrent", "w")
                 f.write(torrent)
                 f.close()
 
     def _transact(self, headers, body='', method="GET", path="/"):
-        # time.sleep(random.randint(1,10))
+        """
+        Make http transaction and return the response
+        """
         c = httplib.HTTPSConnection("rarbg.to")
         c.request(method=method, url=path, body=body, headers=headers)
         response = c.getresponse()
         (response.status, response.reason)
         # We didn't get the response we wanted
         if (response.status != 200):
-            print 'Damn, Were caught! Status is '+str(response.status)
+            print '\nDamn, Were caught! Status is '+str(response.status)
+            if response.status == 302:
+                self._solve_captcha()
             return False
         return response.read()
 
     def refresh(self):
+        """
+        Populate entry list for specific search pattern
+        """
         # This parser will handle each torrents page to extract
         # torrent title and torrent link
         parser = MainHTMLParser(self._maxEntries)
@@ -68,8 +136,7 @@ class AdapterRarbg(Adapter):
         while (len(parser.dictionary) < AdapterRarbg.MAX_PAGES):
             parameters = {
                     'search': self._searchString,
-                    'category': '18',
-                    'category': '41',
+                    'category': self._category,
                     'order': 'seeders',
                     'by': 'DESC',
                     'page': str(i)
@@ -78,10 +145,12 @@ class AdapterRarbg(Adapter):
             path = "/torrents.php?"+parameters
 
             page = self._transact(headers=self._defHeaders, path=path)
-            if (not page):
+            while (not page):
                 # We're caught...
                 print "Master, they're on to us at torrent page! Do something!"
-                return
+                self._solve_captcha()
+                page = self._transact(headers=self._defHeaders,
+                                      body='', method="GET", path=path)
             parser.feed(page)
             i = i+1
 
@@ -89,13 +158,16 @@ class AdapterRarbg(Adapter):
             # Get torrent page
             page = self._transact(headers=self._defHeaders,
                                   body='', method="GET", path=i[0])
-            if (not page):
+            while (not page):
                 # We're caught...
                 print "Master, they're on to us at torrent link! Do something!"
-                break
+                self._solve_captcha()
+                page = self._transact(headers=self._defHeaders,
+                                      body='', method="GET", path=i[0])
             # Feed torrent page to the magnets parser
             magnets.feed(page)
 
+        options = []
         for i in range(len(magnets.dictionary)):
             entry = {}
             entry[AdapterRarbg.FILENAME] = parser.dictionary[i][0]+".torrent"
@@ -104,25 +176,30 @@ class AdapterRarbg(Adapter):
             entry[AdapterRarbg.IMDB] = parser.dictionary[i][2]
             entry[AdapterRarbg.DATE] = parser.dictionary[i][3]
             entry[AdapterRarbg.SIZE] = parser.dictionary[i][4]
-            entry[AdapterRarbg.LEECHERS] = parser.dictionary[i][5]
-            entry[AdapterRarbg.SEEDERS] = parser.dictionary[i][6]
+            entry[AdapterRarbg.SEEDERS] = parser.dictionary[i][5]
+            entry[AdapterRarbg.LEECHERS] = parser.dictionary[i][6]
+
+            options.append(entry[AdapterRarbg.TITLE])
             print '''
+---['''+str(i)+''']---
 Title: {}
 Magnet: {}
 IMDB: {}
 Date: {}
 Size: {}
-Leechers: {}
-Seeders: {}'''.format(entry[AdapterRarbg.TITLE],
-                      entry[AdapterRarbg.MAGNET],
-                      entry[AdapterRarbg.IMDB],
-                      entry[AdapterRarbg.DATE],
-                      entry[AdapterRarbg.SIZE],
-                      entry[AdapterRarbg.LEECHERS],
-                      entry[AdapterRarbg.SEEDERS])
+Seeders: {}
+Leechers: {}'''.format(entry[AdapterRarbg.TITLE],
+                        entry[AdapterRarbg.MAGNET],
+                        entry[AdapterRarbg.IMDB],
+                        entry[AdapterRarbg.DATE],
+                        entry[AdapterRarbg.SIZE],
+                        entry[AdapterRarbg.SEEDERS],
+                        entry[AdapterRarbg.LEECHERS])
 
+            # XXX: Move this somewhere else
             self._generateTorrent(
-                                 magnets.dictionary[i],
-                                 parser.dictionary[i][0].
-                                 replace('/torrent/', ''),
-                                 True)
+                                    magnets.dictionary[i],
+                                    parser.dictionary[i][0].
+                                    replace('/torrent/', ''),
+                                    True)
+            print("Torrent added.")
