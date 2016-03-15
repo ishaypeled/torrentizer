@@ -1,16 +1,13 @@
-import urllib, urllib2
+import urllib
+import urllib2
 import httplib
 import lxml.html
-import os, sys
+import os
+import pytesseract
 import pyprind
-from menu import show_menu
 from Adapter import Adapter
 from Parsers import MainHTMLParser, MagnetizerHTMLParser
-try:
-    import Image
-except ImportError:
-    from PIL import IMG
-import pytesseract
+from PIL import Image
 
 
 class AdapterRarbg(Adapter):
@@ -26,7 +23,9 @@ class AdapterRarbg(Adapter):
     MAX_PAGES = 1
 
     def __init__(self, searchString, category, maxEntries):
-        # super(AdapterRarbg, self).__init__(self, searchString, maxEntries)
+        """
+        Initialize the RarBg adapter
+        """
         Adapter.__init__(self, searchString, category, maxEntries)
         self._entries = []
         self._defHeaders = {
@@ -47,7 +46,9 @@ class AdapterRarbg(Adapter):
 
         # Grab captcha image from url
         tree = lxml.html.fromstring(page)
-        imgurl = "http://rarbg.to" + tree.xpath(".//img")[1].get('src')
+        captcha_target = tree.xpath(".//img")[1].get('src')
+        captcha_id = tree.xpath(".//input")[1].get('value')
+        imgurl = "http://rarbg.to" + captcha_target
 
         # Read the image and write to file
         req = urllib2.Request(imgurl, None, self._defHeaders)
@@ -55,31 +56,47 @@ class AdapterRarbg(Adapter):
         img = f.read()
 
         open('out.png', 'wb').write(img)
-        captcha = pytesseract.image_to_string(Image.open('out.png'), lang='eng')
-        return captcha
+        captcha = pytesseract.image_to_string(
+                Image.open('out.png'), lang='eng')
+        return (captcha, captcha_id)
 
     def _solve_captcha(self):
         """
-        solve captcha and submit form
+        Solve captcha and submit form
         """
         url = 'http://rarbg.to/bot_check.php'
-        captcha = self._get_captcha(url)
-        values = {'solve_string': captcha}
+        captcha, captcha_id = self._get_captcha(url)
+        print("Id: "+captcha_id)
+        values = {'solve_string': captcha,
+                  'captcha_id': captcha_id,
+                  'submitted_bot_captcha': '1'}
 
         data = urllib.urlencode(values)
         req = urllib2.Request(url, data, self._defHeaders)
         response = urllib2.urlopen(req)
-        the_page = response.read()
-        print("[+] " + captcha + " is your captcha, now do something with it")
-        # TODO: input captcha in text field and submit form
+        response.read()
+
+        print("[+] " + captcha + " is your captcha. "
+                                 "It has been submitted and you should "
+                                 "be good to go!")
 
     def getAdapterName(self):
+        """
+        Identifier for this adapter
+        """
         return "rarbg.to adapter"
 
     def getItems(self):
+        """
+        Found entries for this adapter
+        """
         return self._entries
 
     def _generateTorrent(self, magnet, name, dry=False):
+        """
+        Make torrent from magnet
+        XXX: Extract to another utility class
+        """
         torrent = "d10:magnet-uri{}:{}e".format(len(magnet), magnet)
         if (not dry):
             for i in range(AdapterRarbg.MAX_PAGES):
@@ -91,7 +108,9 @@ class AdapterRarbg(Adapter):
                 f.close()
 
     def _transact(self, headers, body='', method="GET", path="/"):
-        # time.sleep(random.randint(1,10))
+        """
+        Make http transaction and return the response
+        """
         c = httplib.HTTPSConnection("rarbg.to")
         c.request(method=method, url=path, body=body, headers=headers)
         response = c.getresponse()
@@ -104,8 +123,10 @@ class AdapterRarbg(Adapter):
             return False
         return response.read()
 
-
     def refresh(self):
+        """
+        Populate entry list for specific search pattern
+        """
         # This parser will handle each torrents page to extract
         # torrent title and torrent link
         parser = MainHTMLParser(self._maxEntries)
@@ -113,7 +134,6 @@ class AdapterRarbg(Adapter):
         # Initializing here to keep persistant
         magnets = MagnetizerHTMLParser(self._maxEntries)
         i = 0
-        bar = pyprind.ProgPercent(AdapterRarbg.MAX_PAGES, title="Searching. . .")
         while (len(parser.dictionary) < AdapterRarbg.MAX_PAGES):
             parameters = {
                     'search': self._searchString,
@@ -126,23 +146,29 @@ class AdapterRarbg(Adapter):
             path = "/torrents.php?"+parameters
 
             page = self._transact(headers=self._defHeaders, path=path)
-            if (not page):
+            while (not page):
                 # We're caught...
                 print "Master, they're on to us at torrent page! Do something!"
-                return
+                self._solve_captcha()
+                page = self._transact(headers=self._defHeaders,
+                                      body='', method="GET", path=path)
             parser.feed(page)
             i = i+1
-            bar.update()
 
-        bar = pyprind.ProgBar(len(parser.dictionary), title="\nFetching results. . .", width=70)
+        bar = pyprind.ProgBar(len(parser.dictionary),
+                              title="\nFetching results...",
+                              width=70,
+                              bar_char="*")
         for i in parser.dictionary:
             # Get torrent page
             page = self._transact(headers=self._defHeaders,
                                   body='', method="GET", path=i[0])
-            if (not page):
+            while (not page):
                 # We're caught...
                 print "Master, they're on to us at torrent link! Do something!"
-                break
+                self._solve_captcha()
+                page = self._transact(headers=self._defHeaders,
+                                      body='', method="GET", path=i[0])
             # Feed torrent page to the magnets parser
             magnets.feed(page)
             bar.update()
@@ -159,9 +185,7 @@ class AdapterRarbg(Adapter):
             entry[AdapterRarbg.SEEDERS] = parser.dictionary[i][5]
             entry[AdapterRarbg.LEECHERS] = parser.dictionary[i][6]
 
-            options.append(entry[AdapterRarbg.TITLE]) # + " | " +
-#                            entry[AdapterRarbg.SIZE] + " | " +
-#                            entry[AdapterRarbg.SEEDERS] + " Seeders")
+            options.append(entry[AdapterRarbg.TITLE])
             print '''
 ---['''+str(i)+''']---
 Title: {}
@@ -170,28 +194,18 @@ IMDB: {}
 Date: {}
 Size: {}
 Seeders: {}
-Leechers:: {}'''.format(entry[AdapterRarbg.TITLE],
-                      entry[AdapterRarbg.MAGNET],
-                      entry[AdapterRarbg.IMDB],
-                      entry[AdapterRarbg.DATE],
-                      entry[AdapterRarbg.SIZE],
-                      entry[AdapterRarbg.SEEDERS],
-                      entry[AdapterRarbg.LEECHERS])
+Leechers: {}'''.format(entry[AdapterRarbg.TITLE],
+                       entry[AdapterRarbg.MAGNET],
+                       entry[AdapterRarbg.IMDB],
+                       entry[AdapterRarbg.DATE],
+                       entry[AdapterRarbg.SIZE],
+                       entry[AdapterRarbg.SEEDERS],
+                       entry[AdapterRarbg.LEECHERS])
 
-        print
-        print("--------------------------------------------------------")
-        try:
-            selection = show_menu(options, sort=False, location=True)
-        except KeyboardInterrupt:
-            print("\nExiting")
-            sys.exit(0)
-        try:
+            # XXX: Move this somewhere else
             self._generateTorrent(
-                                    magnets.dictionary[selection],
-                                    parser.dictionary[selection][0].
+                                    magnets.dictionary[i],
+                                    parser.dictionary[i][0].
                                     replace('/torrent/', ''),
-                                    False)
+                                    True)
             print("Torrent added.")
-        except IndexError:
-            print("Exiting")
-            sys.exit(0)
