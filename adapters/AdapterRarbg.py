@@ -2,7 +2,6 @@ import urllib
 import urllib2
 import httplib
 import lxml.html
-import os
 import pytesseract
 import pyprind
 from Adapter import Adapter
@@ -11,15 +10,6 @@ from PIL import Image
 
 
 class AdapterRarbg(Adapter):
-    TITLE = 'Title'
-    MAGNET = 'Magnet'
-    FILENAME = 'Filename'
-    LINK = 'Link'
-    IMDB = 'IMDB'
-    DATE = 'Date'
-    SIZE = 'Size'
-    LEECHERS = 'Leechers'
-    SEEDERS = 'Seeders'
     MAX_PAGES = 1
 
     def __init__(self, searchString, category, maxEntries):
@@ -85,26 +75,11 @@ class AdapterRarbg(Adapter):
         """
         return "rarbg.to adapter"
 
-    def getItems(self):
+    def getTorrents(self):
         """
         Found entries for this adapter
         """
         return self._entries
-
-    def _generateTorrent(self, magnet, name, dry=False):
-        """
-        Make torrent from magnet
-        XXX: Extract to another utility class
-        """
-        torrent = "d10:magnet-uri{}:{}e".format(len(magnet), magnet)
-        if (not dry):
-            for i in range(AdapterRarbg.MAX_PAGES):
-                f = open(os.environ['HOME'] +
-                         "/rtorrent/watch/" +
-                         name +
-                         ".torrent", "w")
-                f.write(torrent)
-                f.close()
 
     def _transact(self, headers, body='', method="GET", path="/"):
         """
@@ -172,7 +147,6 @@ class AdapterRarbg(Adapter):
             magnets.feed(page)
             bar.update()
 
-        options = []
         for i in range(len(magnets.dictionary)):
             entry = {}
             entry[AdapterRarbg.FILENAME] = parser.dictionary[i][0]+".torrent"
@@ -183,28 +157,4 @@ class AdapterRarbg(Adapter):
             entry[AdapterRarbg.SIZE] = parser.dictionary[i][4]
             entry[AdapterRarbg.SEEDERS] = parser.dictionary[i][5]
             entry[AdapterRarbg.LEECHERS] = parser.dictionary[i][6]
-
-            options.append(entry[AdapterRarbg.TITLE])
-            print '''
----['''+str(i)+''']---
-Title: {}
-Magnet: {}
-IMDB: {}
-Date: {}
-Size: {}
-Seeders: {}
-Leechers: {}'''.format(entry[AdapterRarbg.TITLE],
-                       entry[AdapterRarbg.MAGNET],
-                       entry[AdapterRarbg.IMDB],
-                       entry[AdapterRarbg.DATE],
-                       entry[AdapterRarbg.SIZE],
-                       entry[AdapterRarbg.SEEDERS],
-                       entry[AdapterRarbg.LEECHERS])
-
-            # XXX: Move this somewhere else
-            self._generateTorrent(
-                                    magnets.dictionary[i],
-                                    parser.dictionary[i][0].
-                                    replace('/torrent/', ''),
-                                    True)
-            print("Torrent added.")
+            self._entries.append(entry)
