@@ -4,6 +4,7 @@ import httplib
 import lxml.html
 import pytesseract
 import pyprind
+import logging
 from Adapter import Adapter
 from ParsersRarbg import MainHTMLParser, MagnetizerHTMLParser
 from PIL import Image
@@ -17,6 +18,7 @@ class AdapterRarbg(Adapter):
         Initialize the RarBg adapter
         """
         Adapter.__init__(self, searchString, category, maxEntries)
+        self._logger = logging.getLogger(__name__)
         self._defHeaders = {
             'accept': '''text/html,application/xhtml+xml,application/xml;q=0.9,
             image/webp,*/*;q=0.8''',
@@ -55,7 +57,7 @@ class AdapterRarbg(Adapter):
         """
         url = 'http://rarbg.to/bot_check.php'
         captcha, captcha_id = self._getCaptcha(url)
-        print("Id: "+captcha_id)
+        self._logger.debug("Captcha id: "+captcha_id)
         values = {'solve_string': captcha,
                   'captcha_id': captcha_id,
                   'submitted_bot_captcha': '1'}
@@ -65,9 +67,10 @@ class AdapterRarbg(Adapter):
         response = urllib2.urlopen(req)
         response.read()
 
-        print("[+] " + captcha + " is your captcha. "
-                                 "It has been submitted and you should "
-                                 "be good to go!")
+        self._logger.debug("captcha challange resolved to: " +
+                           captcha +
+                           "It has been submitted and you should "
+                           "be good to go!")
 
     def getAdapterName(self):
         """
@@ -91,7 +94,9 @@ class AdapterRarbg(Adapter):
         (response.status, response.reason)
         # We didn't get the response we wanted
         if (response.status != 200):
-            print '\nDamn, Were caught! Status is '+str(response.status)
+            self._logger.info('Bot check is probably on to us '
+                              'response was ' + str(response.status) +
+                              ' attempting to solve captcha')
             if response.status == 302:
                 self._solveCaptcha()
             return False
@@ -122,7 +127,9 @@ class AdapterRarbg(Adapter):
             page = self._transact(headers=self._defHeaders, path=path)
             while (not page):
                 # We're caught...
-                print "Master, they're on to us at torrent page! Do something!"
+                self._logger.info("Master,"
+                                     "they're on to us at torrent page!"
+                                     "Do something!")
                 self._solveCaptcha()
                 page = self._transact(headers=self._defHeaders,
                                       body='', method="GET", path=path)
@@ -139,7 +146,9 @@ class AdapterRarbg(Adapter):
                                   body='', method="GET", path=i[0])
             while (not page):
                 # We're caught...
-                print "Master, they're on to us at torrent link! Do something!"
+                self._logger.info("Master, "
+                                  "they're on to us at torrent link! "
+                                  "Do something!")
                 self._solveCaptcha()
                 page = self._transact(headers=self._defHeaders,
                                       body='', method="GET", path=i[0])

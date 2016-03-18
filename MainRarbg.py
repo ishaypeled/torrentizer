@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sys
+import logging
 from adapters.AdapterRarbg import AdapterRarbg
 from adapters.Adapter import Adapter
 from plugins.PluginRtorrent import PluginRtorrent
@@ -16,6 +17,7 @@ options:
     exit(1)
 
 if (__name__ == '__main__'):
+    logging.basicConfig(filename='torrentizer.log', level=logging.DEBUG)
     if (len(sys.argv) < 3):
         usage()
     if "-mv" in sys.argv[1]:

@@ -1,3 +1,6 @@
+import logging
+
+
 class Adapter:
     """
     These are definitions for entry lookup
@@ -17,6 +20,7 @@ class Adapter:
         self._category = category
         self._maxEntries = maxEntries
         self._entries = []
+        self._logger = logging.getLogger(__name__)
 
     def getAdapterName(self):
         raise("Not implemented")
@@ -26,7 +30,7 @@ class Adapter:
 
     def prettyPrintTorrents(self):
         for entry in self._entries:
-            print '''
+            print('''
 ---['''+entry[Adapter.TITLE]+''']---
 Magnet: {}
 IMDB: {}
@@ -38,7 +42,7 @@ Leechers: {}'''.format(entry[Adapter.MAGNET],
                        entry[Adapter.DATE],
                        entry[Adapter.SIZE],
                        entry[Adapter.SEEDERS],
-                       entry[Adapter.LEECHERS])
+                       entry[Adapter.LEECHERS]))
 
     def refresh(self):
         raise("Not implemented")

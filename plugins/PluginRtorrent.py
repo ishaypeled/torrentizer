@@ -1,5 +1,6 @@
 from Plugin import Plugin
 from uuid import uuid4
+import logging
 import os
 
 
@@ -9,12 +10,13 @@ class PluginRtorrent(Plugin):
         """
         Initialize the rtorrent plugin
         """
+        self._logger = logging.getLogger(__name__)
         self._name = "PluginRarbg"
 
     def putMagnet(self, magnet, dry=False):
         """
         Put magnet in rtorrent watch directory. If dry is set
-        then just print it
+        then just log it
         """
         torrent = self._generateTorrent(magnet)
         fileName = uuid4().hex + ".torrent"
@@ -25,6 +27,6 @@ class PluginRtorrent(Plugin):
             f.write(torrent)
             f.close()
         else:
-            print "--=== DRY ===--"
-            print "magnet: "+magnet
-            print "generated torrent name: "+fileName
+            self._logger.info("--=== DRY ===--")
+            self._logger.info("magnet: "+magnet)
+            self._logger.info("generated torrent name: "+fileName)
